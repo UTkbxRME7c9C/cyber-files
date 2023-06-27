@@ -1,0 +1,54 @@
+Note: this initial implementation is for grayscale images
+Pseudocode steps:
+
+Encode
+- Image is split into blocks of two pixels each
+- For each block
+	- compute the difference (diff) between their intensity values
+	- ranges of possible differences
+		- #: (lower#, upper#) -> bits#
+		- 0: (0, 7) -> 3
+		- 1: (8, 15) -> 3
+		- 2: (16, 31) -> 4
+		- 3: (32, 63) -> 5
+		- 4: (64, 127) -> 6
+		- 5: (128, 255) -> 7
+	- size of encoding in block determined by formula (bits#), where upper# and lower# correspond to the range of possible differences diff falls into
+		- t = [logbase2(upper# - lower# + 1)]
+		- ex: diff of 40 -> logbase2(63-32+1) = 5 bits
+	- check that the additional diff encoding will not cause over/underflow on pixels based on maximum possible shift based on this range of diffs
+		- if yes over/underflow encode nothing, move to next block
+			- ex: block has values (240, 250)
+			- diff = 10 -> range2 -> 3 bits encode -> maximum change of 8
+			- 255 - 250 = 6 < 8 -> possible overflow
+		- if no over/underflow, continue encoding
+			- ex: block has values (150, 170)
+			- diff = 20 -> range3 -> 4 bits encode -> maximum change of 16
+			- 255 - 170 = 85 > 16 -> no possible overflow
+			- 150 - 0 = 150 > 16 -> no possible underflow 
+	- bit sequence of text as decimal value (td)
+	- newdiff = td + lower
+	- modified pixel values calculated as follows (newpixel1, newpixel2)
+		- m = abs(newdiff - diff)
+		- if (pixel1 >= pixel2) and (newdiff > diff)
+			- (pixel1 + (m/2), pixel2 - (m/2))
+		- if (pixel1 < pixel2) and (newdiff > diff)
+			- (pixel1 - (m/2), pixel2 + (m/2))
+		- if (pixel1 >= pixel2) and (newdiff <= diff)
+			- (pixel1 - (m/2), pixel2 + (m/2))
+		- if (pixel1 < pixel2) and (newdiff <= diff)
+			- (pixel1 + (m/2), pixel2 - (m/2))
+	- pixel1 and pixel2 are replaced by stego pixels newpixel1 and newpixel2
+	- repeat with next block 
+		- if message is fully encoded, encode rest of the pixels with zeroes
+
+Decode
+- Image is split into blocks of two pixels each
+- For each block
+	- compute the difference (diffp) between their intensity values
+	- check whether block would have been ruled out for possible over/underflow on pixels
+	- extract data with equation
+		- bit sequence = abs(diffp - lower#)
+	- store every 8 bits into a byte/char and append to string
+	- repeat with new blocks until the message is fully decoded
+		- if text: stop when last byte equals zero
